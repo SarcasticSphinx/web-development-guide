@@ -142,14 +142,14 @@ function Counter() {
 
 | Feature Needed                  | Component Type |
 | ------------------------------- | -------------- |
-| Fetch data                      | Server [Good]      |
-| Access backend resources        | Server [Good]      |
-| Use sensitive info (API keys)   | Server [Good]      |
-| Reduce client JavaScript        | Server [Good]      |
-| Use hooks (useState, useEffect) | Client [Good]      |
-| Use browser APIs                | Client [Good]      |
-| Add event listeners             | Client [Good]      |
-| Use Context                     | Client [Good]      |
+| Fetch data                      | Server [Good]  |
+| Access backend resources        | Server [Good]  |
+| Use sensitive info (API keys)   | Server [Good]  |
+| Reduce client JavaScript        | Server [Good]  |
+| Use hooks (useState, useEffect) | Client [Good]  |
+| Use browser APIs                | Client [Good]  |
+| Add event listeners             | Client [Good]  |
+| Use Context                     | Client [Good]  |
 
 ### Composition Pattern: Server with Client Islands
 
@@ -369,9 +369,15 @@ export const getUser = cache(async (id: string) => {
 
 ## Server Actions
 
-Server Actions are asynchronous functions that execute on the server. Use them for form submissions and data mutations.
+Server Actions are asynchronous Server Functions that execute on the server. Use them for form submissions, data mutations, and any server-side operations triggered from the client.
 
-### Basic Server Action
+> **Important**: Server Actions create public HTTP endpoints. Always treat them with the same security assumptions as public APIs — validate inputs and verify authorization.
+
+### Defining Server Actions
+
+#### File-Level Directive (Recommended)
+
+Place `"use server"` at the top of a file to mark all exports as Server Actions:
 
 ```typescript
 // actions/users.ts
@@ -380,13 +386,21 @@ Server Actions are asynchronous functions that execute on the server. Use them f
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { auth } from "@/lib/auth";
 
 const createUserSchema = z.object({
-  name: z.string().min(2),
-  email: z.string().email(),
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().email("Invalid email address"),
 });
 
-export async function createUser(formData: FormData) {
+export async function createUser(prevState: unknown, formData: FormData) {
+  // 1. Authentication check
+  const session = await auth();
+  if (!session?.user) {
+    return { error: "You must be signed in to perform this action" };
+  }
+
+  // 2. Input validation
   const validatedFields = createUserSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
@@ -398,16 +412,49 @@ export async function createUser(formData: FormData) {
     };
   }
 
-  const user = await prisma.user.create({
-    data: validatedFields.data,
-  });
+  // 3. Authorization check (if needed)
+  if (!session.user.canCreateUsers) {
+    return { error: "You do not have permission to create users" };
+  }
 
-  revalidatePath("/users");
-  redirect(`/users/${user.id}`);
+  // 4. Perform mutation
+  try {
+    const user = await prisma.user.create({
+      data: validatedFields.data,
+    });
+
+    // 5. Revalidate and redirect
+    revalidatePath("/users");
+    redirect(`/users/${user.id}`);
+  } catch (error) {
+    return { error: "Failed to create user. Please try again." };
+  }
+}
+```
+
+#### Inline Server Actions (Server Components Only)
+
+```typescript
+// app/page.tsx (Server Component)
+export default async function Page() {
+  async function submitFeedback(formData: FormData) {
+    "use server";
+    const feedback = formData.get("feedback");
+    await saveFeedback(feedback);
+  }
+
+  return (
+    <form action={submitFeedback}>
+      <textarea name="feedback" required />
+      <button type="submit">Submit</button>
+    </form>
+  );
 }
 ```
 
 ### Using Server Actions in Forms
+
+#### With useActionState (Recommended)
 
 ```typescript
 // components/CreateUserForm.tsx
@@ -416,24 +463,54 @@ export async function createUser(formData: FormData) {
 import { useActionState } from "react";
 import { createUser } from "@/actions/users";
 
+const initialState = {
+  errors: {},
+  error: null,
+};
+
 export function CreateUserForm() {
-  const [state, formAction, pending] = useActionState(createUser, null);
+  const [state, formAction, pending] = useActionState(createUser, initialState);
 
   return (
     <form action={formAction}>
       <div>
         <label htmlFor="name">Name</label>
-        <input id="name" name="name" required />
-        {state?.errors?.name && <p className="error">{state.errors.name[0]}</p>}
+        <input
+          id="name"
+          name="name"
+          required
+          aria-describedby={state?.errors?.name ? "name-error" : undefined}
+          aria-invalid={!!state?.errors?.name}
+        />
+        {state?.errors?.name && (
+          <p id="name-error" className="text-red-500 text-sm">
+            {state.errors.name[0]}
+          </p>
+        )}
       </div>
 
       <div>
         <label htmlFor="email">Email</label>
-        <input id="email" name="email" type="email" required />
+        <input
+          id="email"
+          name="email"
+          type="email"
+          required
+          aria-describedby={state?.errors?.email ? "email-error" : undefined}
+          aria-invalid={!!state?.errors?.email}
+        />
         {state?.errors?.email && (
-          <p className="error">{state.errors.email[0]}</p>
+          <p id="email-error" className="text-red-500 text-sm">
+            {state.errors.email[0]}
+          </p>
         )}
       </div>
+
+      {state?.error && (
+        <p className="text-red-500" role="alert">
+          {state.error}
+        </p>
+      )}
 
       <button type="submit" disabled={pending}>
         {pending ? "Creating..." : "Create User"}
@@ -443,12 +520,117 @@ export function CreateUserForm() {
 }
 ```
 
+#### With useFormStatus for Submit Buttons
+
+```typescript
+// components/SubmitButton.tsx
+"use client";
+
+import { useFormStatus } from "react-dom";
+
+export function SubmitButton({ children }: { children: React.ReactNode }) {
+  const { pending } = useFormStatus();
+
+  return (
+    <button type="submit" disabled={pending}>
+      {pending ? "Submitting..." : children}
+    </button>
+  );
+}
+
+// Usage in form
+<form action={submitAction}>
+  <input name="email" type="email" required />
+  <SubmitButton>Subscribe</SubmitButton>
+</form>;
+```
+
+### Passing Additional Arguments
+
+Use `bind` to pass additional arguments to Server Actions:
+
+```typescript
+// components/UserProfile.tsx
+"use client";
+
+import { updateUser } from "@/actions/users";
+
+export function UserProfile({ userId }: { userId: string }) {
+  // Bind userId as the first argument
+  const updateUserWithId = updateUser.bind(null, userId);
+
+  return (
+    <form action={updateUserWithId}>
+      <input type="text" name="name" />
+      <button type="submit">Update</button>
+    </form>
+  );
+}
+
+// actions/users.ts
+("use server");
+
+export async function updateUser(userId: string, formData: FormData) {
+  const name = formData.get("name");
+  // userId is available here
+  await prisma.user.update({
+    where: { id: userId },
+    data: { name },
+  });
+}
+```
+
+### Invoking Server Actions Outside Forms
+
+#### Event Handlers
+
+```typescript
+"use client";
+
+import { useState } from "react";
+import { incrementLike } from "@/actions/posts";
+
+export function LikeButton({ postId, initialLikes }: Props) {
+  const [likes, setLikes] = useState(initialLikes);
+
+  async function handleClick() {
+    const updatedLikes = await incrementLike(postId);
+    setLikes(updatedLikes);
+  }
+
+  return <button onClick={handleClick}>❤️ {likes}</button>;
+}
+```
+
+#### useEffect (Use Sparingly)
+
+```typescript
+"use client";
+
+import { useEffect, useState, useTransition } from "react";
+import { incrementViews } from "@/actions/analytics";
+
+export function ViewCounter({ postId }: { postId: string }) {
+  const [views, setViews] = useState(0);
+  const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    startTransition(async () => {
+      const updatedViews = await incrementViews(postId);
+      setViews(updatedViews);
+    });
+  }, [postId]);
+
+  return <p>Views: {views}</p>;
+}
+```
+
 ### Optimistic Updates
 
 ```typescript
 "use client";
 
-import { useOptimistic } from "react";
+import { useOptimistic, startTransition } from "react";
 import { addTodo } from "@/actions/todos";
 
 export function TodoList({ todos }: { todos: Todo[] }) {
@@ -456,13 +638,17 @@ export function TodoList({ todos }: { todos: Todo[] }) {
     todos,
     (state, newTodo: string) => [
       ...state,
-      { id: "temp", title: newTodo, completed: false },
+      { id: `temp-${Date.now()}`, title: newTodo, completed: false },
     ]
   );
 
   async function handleSubmit(formData: FormData) {
     const title = formData.get("title") as string;
-    addOptimisticTodo(title);
+
+    startTransition(() => {
+      addOptimisticTodo(title);
+    });
+
     await addTodo(formData);
   }
 
@@ -470,7 +656,12 @@ export function TodoList({ todos }: { todos: Todo[] }) {
     <div>
       <ul>
         {optimisticTodos.map((todo) => (
-          <li key={todo.id}>{todo.title}</li>
+          <li
+            key={todo.id}
+            className={todo.id.startsWith("temp") ? "opacity-50" : ""}
+          >
+            {todo.title}
+          </li>
         ))}
       </ul>
       <form action={handleSubmit}>
@@ -481,6 +672,208 @@ export function TodoList({ todos }: { todos: Todo[] }) {
   );
 }
 ```
+
+### Cache Revalidation and Redirects
+
+```typescript
+"use server";
+
+import { revalidatePath, revalidateTag } from "next/cache";
+import { redirect } from "next/navigation";
+
+export async function createPost(formData: FormData) {
+  const post = await prisma.post.create({
+    data: { title: formData.get("title") as string },
+  });
+
+  // Revalidate specific path
+  revalidatePath("/posts");
+
+  // Or revalidate by tag
+  revalidateTag("posts");
+
+  // Redirect (must be called after revalidation)
+  redirect(`/posts/${post.id}`);
+}
+
+export async function updatePost(postId: string, formData: FormData) {
+  await prisma.post.update({
+    where: { id: postId },
+    data: { title: formData.get("title") as string },
+  });
+
+  // Revalidate the specific post page
+  revalidatePath(`/posts/${postId}`);
+}
+```
+
+### Working with Cookies
+
+```typescript
+"use server";
+
+import { cookies } from "next/headers";
+
+export async function setTheme(theme: string) {
+  const cookieStore = await cookies();
+  cookieStore.set("theme", theme, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 365, // 1 year
+  });
+}
+
+export async function logout() {
+  const cookieStore = await cookies();
+  cookieStore.delete("AUTH_TOKEN");
+}
+```
+
+### Server Action Security Best Practices
+
+#### 1. Always Authenticate and Authorize
+
+```typescript
+"use server";
+
+import { auth } from "@/lib/auth";
+import { forbidden, unauthorized } from "next/navigation";
+
+export async function deletePost(postId: string) {
+  const session = await auth();
+
+  // Authentication
+  if (!session?.user) {
+    unauthorized(); // Returns 401
+  }
+
+  // Authorization
+  const post = await prisma.post.findUnique({ where: { id: postId } });
+  if (post?.authorId !== session.user.id && !session.user.isAdmin) {
+    forbidden(); // Returns 403
+  }
+
+  await prisma.post.delete({ where: { id: postId } });
+  revalidatePath("/posts");
+}
+```
+
+#### 2. Always Validate Input
+
+```typescript
+"use server";
+
+import { z } from "zod";
+
+const updateProfileSchema = z.object({
+  name: z.string().min(1).max(100),
+  bio: z.string().max(500).optional(),
+  website: z.string().url().optional().or(z.literal("")),
+});
+
+export async function updateProfile(formData: FormData) {
+  const session = await auth();
+  if (!session?.user) {
+    return { error: "Unauthorized" };
+  }
+
+  // NEVER trust client input directly
+  const result = updateProfileSchema.safeParse({
+    name: formData.get("name"),
+    bio: formData.get("bio"),
+    website: formData.get("website"),
+  });
+
+  if (!result.success) {
+    return { errors: result.error.flatten().fieldErrors };
+  }
+
+  // Safe to use result.data
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: result.data,
+  });
+}
+```
+
+#### 3. Avoid Mutations During Rendering
+
+```typescript
+// [Bad] Never mutate during render
+export default async function Page({ searchParams }: Props) {
+  if (searchParams.logout) {
+    cookies().delete("token"); // DON'T DO THIS
+  }
+  return <div>...</div>;
+}
+
+// [Good] Use Server Actions for mutations
+export default function Page() {
+  return (
+    <form action={logout}>
+      <button type="submit">Logout</button>
+    </form>
+  );
+}
+```
+
+#### 4. Closure Security
+
+Variables captured in closures are automatically encrypted by Next.js:
+
+```typescript
+export default async function Page() {
+  const secretKey = process.env.SECRET_KEY; // Captured in closure
+
+  async function processPayment(formData: FormData) {
+    "use server";
+    // secretKey is encrypted when sent to client
+    // and decrypted when action is invoked
+    await chargeCard(formData, secretKey);
+  }
+
+  return <form action={processPayment}>...</form>;
+}
+```
+
+> **Note**: Don't rely solely on encryption. Sensitive data should be fetched server-side within the action, not captured in closures.
+
+### Configuring Server Actions
+
+```typescript
+// next.config.ts
+import type { NextConfig } from "next";
+
+const config: NextConfig = {
+  experimental: {
+    serverActions: {
+      // Maximum request body size (default: 1MB)
+      bodySizeLimit: "2mb",
+
+      // Allowed origins for CSRF protection (for reverse proxies)
+      allowedOrigins: ["my-proxy.com", "*.my-domain.com"],
+    },
+  },
+};
+
+export default config;
+```
+
+### Server Actions Best Practices Summary
+
+| Practice                          | Description                                      |
+| --------------------------------- | ------------------------------------------------ |
+| **Use file-level `"use server"`** | Keep actions in dedicated files for organization |
+| **Always authenticate**           | Check session before any mutation                |
+| **Always authorize**              | Verify user has permission for the action        |
+| **Always validate input**         | Use Zod or similar for schema validation         |
+| **Handle errors gracefully**      | Return error objects, don't throw in forms       |
+| **Use `useActionState`**          | For form state management and pending states     |
+| **Use `useOptimistic`**           | For immediate UI feedback                        |
+| **Revalidate after mutations**    | Call `revalidatePath` or `revalidateTag`         |
+| **Redirect after success**        | Use `redirect()` for navigation                  |
+| **Don't mutate during render**    | Only mutate in response to user actions          |
 
 ---
 
@@ -578,32 +971,77 @@ export async function GET(request: NextRequest, { params }: Context) {
 }
 ```
 
-### Middleware
+### Proxy (Route Protection)
+
+Next.js 16 uses `proxy.ts` instead of middleware for route protection and optimistic auth checks. Proxy runs on every route including prefetched routes, so keep checks lightweight (cookie-based only, no database calls).
 
 ```typescript
-// middleware.ts
+// proxy.ts
 import { NextRequest, NextResponse } from "next/server";
+import { decrypt } from "@/lib/session";
+import { cookies } from "next/headers";
 
-export function middleware(request: NextRequest) {
-  // Check authentication
-  const token = request.cookies.get("token");
+// Define protected and public routes
+const protectedRoutes = ["/dashboard", "/settings", "/profile"];
+const publicRoutes = ["/login", "/signup", "/"];
 
-  if (!token && request.nextUrl.pathname.startsWith("/dashboard")) {
-    return NextResponse.redirect(new URL("/login", request.url));
+export default async function proxy(req: NextRequest) {
+  const path = req.nextUrl.pathname;
+  const isProtectedRoute = protectedRoutes.some((route) =>
+    path.startsWith(route)
+  );
+  const isPublicRoute = publicRoutes.includes(path);
+
+  // Decrypt session from cookie (optimistic check only)
+  const cookie = (await cookies()).get("session")?.value;
+  const session = await decrypt(cookie);
+
+  // Redirect to login if accessing protected route without session
+  if (isProtectedRoute && !session?.userId) {
+    return NextResponse.redirect(new URL("/login", req.nextUrl));
   }
 
-  // Add headers
+  // Redirect authenticated users away from public auth pages
+  if (isPublicRoute && session?.userId && !path.startsWith("/dashboard")) {
+    return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
+  }
+
+  return NextResponse.next();
+}
+
+// Configure which routes proxy runs on
+export const config = {
+  matcher: [
+    // Match all paths except static files and API routes
+    "/((?!api|_next/static|_next/image|.*\\.png$).*)",
+  ],
+};
+```
+
+> **Important**: Proxy should only perform optimistic checks using session cookies. Always perform secure authorization checks in your Data Access Layer (DAL), Server Actions, and Route Handlers.
+
+### Adding Custom Headers
+
+```typescript
+// proxy.ts
+import { NextRequest, NextResponse } from "next/server";
+
+export default async function proxy(req: NextRequest) {
   const response = NextResponse.next();
-  response.headers.set("x-custom-header", "value");
+
+  // Add security headers
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+
+  // Add request ID for tracing
+  response.headers.set("X-Request-ID", crypto.randomUUID());
 
   return response;
 }
 
 export const config = {
-  matcher: [
-    // Match all paths except static files
-    "/((?!_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
 ```
 

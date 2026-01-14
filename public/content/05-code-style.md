@@ -782,6 +782,80 @@ if (process.env.NODE_ENV === "development") {
 }
 ```
 
+### Always Use Radix with parseInt
+
+The `parseInt()` function can return unexpected results if the radix is not supplied.
+
+```typescript
+// [Bad] Missing radix - can produce unexpected results
+const value = parseInt("08"); // Could be 0 in older engines (octal)
+const port = parseInt(userInput); // Ambiguous
+
+// [Good] Always specify radix
+const value = parseInt("08", 10); // 8 (decimal)
+const port = parseInt(userInput, 10);
+const hex = parseInt("FF", 16); // 255 (hexadecimal)
+const binary = parseInt("1010", 2); // 10 (binary)
+
+// [Good] Alternative: Use Number() for decimal conversion
+const value = Number("08"); // 8
+const port = Number(userInput); // NaN if invalid
+```
+
+### No Global Variables
+
+Variables are not allowed in the global scope unless absolutely necessary. If a global is needed within a function, explicitly use `window.` rather than omitting variable declaration.
+
+```typescript
+// [Bad] Implicit global (missing declaration)
+function processData() {
+  result = computeValue(); // Creates global!
+}
+
+// [Bad] Polluting global scope
+var globalCounter = 0;
+var appConfig = {};
+
+// [Good] If global is absolutely necessary, be explicit
+function initializeApp() {
+  window.myAppConfig = { version: "1.0.0" }; // Explicit global
+}
+
+// [Good] Use modules to avoid globals entirely
+// config.ts
+export const appConfig = {
+  version: "1.0.0",
+  apiUrl: process.env.NEXT_PUBLIC_API_URL,
+};
+
+// [Good] Use React Context for shared state
+const AppContext = createContext<AppConfig | null>(null);
+```
+
+### No Variable Re-declaration
+
+Re-declaring local variables is considered bad practice, even though it's not a syntax error with `var`.
+
+```typescript
+// [Bad] Re-declaring variables
+function processUser(user: User) {
+  var name = user.firstName;
+  // ... 50 lines later ...
+  var name = user.lastName; // Re-declaration!
+}
+
+// [Good] Use unique, descriptive names
+function processUser(user: User) {
+  const firstName = user.firstName;
+  const lastName = user.lastName;
+  const fullName = `${firstName} ${lastName}`;
+}
+
+// [Good] Use const/let which prevent re-declaration
+const name = "John";
+const name = "Jane"; // Error: Cannot redeclare block-scoped variable
+```
+
 ### No Var
 
 Use `const` by default, `let` when reassignment is needed. Never use `var`.

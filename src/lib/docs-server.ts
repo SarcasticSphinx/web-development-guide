@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { DOCS } from "./docs";
+import { DOCS, type DocWithContent } from "./docs";
 
 export function getDocContent(slug: string): string | null {
   const doc = DOCS.find((d) => d.id === slug);
@@ -13,6 +13,16 @@ export function getDocContent(slug: string): string | null {
     console.error(`Error reading file for slug ${slug}:`, error);
     return null;
   }
+}
+
+export function getAllDocsWithContent(): DocWithContent[] {
+  return DOCS.map((doc) => {
+    const content = getDocContent(doc.id) || "";
+    return {
+      ...doc,
+      content,
+    };
+  });
 }
 
 export function getAllDocSlugs() {

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Poppins, JetBrains_Mono } from "next/font/google";
 import { ClientShell } from "@/components/ClientShell";
+import { getAllDocsWithContent } from "@/lib/docs-server";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -28,10 +29,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const docsWithContent = getAllDocsWithContent();
+
   return (
     <html lang="en" className={`${poppins.variable} ${jetbrainsMono.variable}`}>
       <body suppressHydrationWarning>
-        <ClientShell>{children}</ClientShell>
+        <ClientShell docsWithContent={docsWithContent}>{children}</ClientShell>
       </body>
     </html>
   );

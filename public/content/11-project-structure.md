@@ -348,7 +348,7 @@ lib/
 ├── auth/
 │   ├── session.ts            # Session management
 │   ├── permissions.ts        # Permission utilities
-│   └── middleware.ts         # Auth middleware
+│   └── dal.ts                # Data Access Layer for auth
 │
 ├── db/
 │   └── prisma.ts             # Prisma client singleton

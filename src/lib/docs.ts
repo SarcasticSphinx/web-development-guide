@@ -4,6 +4,10 @@ export interface Doc {
   section: string;
 }
 
+export interface DocWithContent extends Doc {
+  content: string;
+}
+
 export const DOCS: Doc[] = [
   { id: "01-introduction", title: "Introduction", section: "Getting Started" },
   {

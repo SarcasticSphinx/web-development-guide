@@ -83,6 +83,65 @@ function processItems(items: Item[]): string[] {
 }
 ```
 
+### Use Named Functions for Multiple Event Bindings
+
+When binding the same handler to more than three elements, use a named function instead of anonymous functions.
+
+```typescript
+// [Bad] Anonymous function bound to many elements
+const buttons = document.querySelectorAll(".action-button");
+buttons.forEach((button) => {
+  button.addEventListener("click", function () {
+    // New function each time!
+    handleAction(this);
+  });
+});
+
+// [Good] Named function for multiple bindings
+function handleButtonClick(event: Event) {
+  const button = event.currentTarget as HTMLButtonElement;
+  handleAction(button);
+}
+
+const buttons = document.querySelectorAll(".action-button");
+buttons.forEach((button) => {
+  button.addEventListener("click", handleButtonClick);
+});
+
+// [Good] In React, define handler once
+function ActionButtons({ items }: { items: Item[] }) {
+  // Handler defined once, not per item
+  const handleClick = useCallback((id: string) => {
+    processItem(id);
+  }, []);
+
+  return (
+    <div>
+      {items.map((item) => (
+        <button key={item.id} onClick={() => handleClick(item.id)}>
+          {item.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// [Good] Event delegation for many similar elements
+function handleDelegatedClick(event: Event) {
+  const target = event.target as HTMLElement;
+  const button = target.closest("[data-action]");
+  if (button) {
+    const action = button.getAttribute("data-action");
+    performAction(action);
+  }
+}
+
+// Single listener on parent instead of many on children
+document
+  .getElementById("button-container")
+  ?.addEventListener("click", handleDelegatedClick);
+```
+
 ### Memoize Expensive Calculations
 
 ```typescript

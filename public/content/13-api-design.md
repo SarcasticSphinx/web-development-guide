@@ -29,8 +29,8 @@ import { withErrorHandling } from "@/lib/api/middleware";
 // GET /api/users
 export const GET = withErrorHandling(async (request: NextRequest) => {
   const { searchParams } = new URL(request.url);
-  const page = parseInt(searchParams.get("page") || "1");
-  const pageSize = parseInt(searchParams.get("pageSize") || "20");
+  const page = parseInt(searchParams.get("page") || "1", 10);
+  const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
 
   const [users, total] = await Promise.all([
     prisma.user.findMany({
@@ -722,10 +722,10 @@ app/api/
 ### Header-Based Versioning
 
 ```typescript
-// middleware.ts
+// proxy.ts
 import { NextRequest, NextResponse } from "next/server";
 
-export function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api/")) {
     const version = request.headers.get("X-API-Version") || "v1";
 
@@ -735,6 +735,8 @@ export function middleware(request: NextRequest) {
 
     return NextResponse.rewrite(url);
   }
+
+  return NextResponse.next();
 }
 ```
 

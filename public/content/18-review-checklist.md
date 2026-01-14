@@ -1,9 +1,7 @@
 ---
-
 # Review Checklist
 
 Use this comprehensive checklist before submitting your project to Envato or before any major release. This ensures your code meets industry standards and marketplace requirements.
-
 ---
 
 ## Table of Contents
@@ -130,10 +128,20 @@ Use this comprehensive checklist before submitting your project to Envato or bef
 
 ### Server Actions
 
+- [ ] `"use server"` directive at file level (not inline)
+- [ ] Authentication check before any mutation
+- [ ] Authorization check (user has permission)
 - [ ] Zod validation on all inputs
-- [ ] Error handling with proper responses
-- [ ] Revalidation after mutations
+- [ ] Never trust client input directly
+- [ ] Error handling with proper responses (return, don't throw)
+- [ ] Revalidation after mutations (`revalidatePath`/`revalidateTag`)
+- [ ] Redirect called after revalidation
+- [ ] No mutations during render (only in response to user actions)
 - [ ] Progressive enhancement considered
+- [ ] Sensitive data not captured in closures
+- [ ] `useActionState` used for form state management
+- [ ] `useFormStatus` used for pending states
+- [ ] `allowedOrigins` configured for reverse proxy setups
 
 ---
 

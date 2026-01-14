@@ -396,17 +396,20 @@ export function requirePermission(role: Role, permission: Permission): void {
 }
 ```
 
-### Middleware Protection
+### Proxy Protection (Next.js 16)
+
+Next.js 16 uses `proxy.ts` instead of middleware for route protection. Proxy should only perform optimistic checks using cookies—never make database calls in proxy.
 
 ```typescript
-// middleware.ts
+// proxy.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
+import { decrypt } from "@/lib/auth/session";
+import { cookies } from "next/headers";
 
-const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/api/auth"];
-const ADMIN_PATHS = ["/admin", "/api/admin"];
+const PUBLIC_PATHS = ["/login", "/register", "/forgot-password"];
+const ADMIN_PATHS = ["/admin"];
 
-export async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths
@@ -414,16 +417,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check authentication
-  const session = await getSession();
+  // Optimistic auth check using session cookie only
+  const cookie = (await cookies()).get("session")?.value;
+  const session = await decrypt(cookie);
 
-  if (!session) {
+  if (!session?.userId) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Check admin authorization
+  // Optimistic admin check (verify in DAL for actual security)
   if (ADMIN_PATHS.some((path) => pathname.startsWith(path))) {
     if (session.role !== "admin") {
       return NextResponse.redirect(new URL("/unauthorized", request.url));
@@ -434,9 +438,13 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|public).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api).*)"],
 };
 ```
+
+> **Important**: Proxy checks are optimistic. Always verify permissions in your Data Access Layer (DAL) and Server Actions for actual security.
+
+````
 
 ### API Route Protection
 
@@ -495,7 +503,7 @@ export const DELETE = withAuth(async (request, { params }, session) => {
   await prisma.user.delete({ where: { id: params.id } });
   return NextResponse.json({ success: true });
 }, "users:delete");
-```
+````
 
 ---
 

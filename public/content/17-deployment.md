@@ -396,6 +396,67 @@ jobs:
 
 ---
 
+## Build Artifact Requirements
+
+### Source Code Distribution
+
+When distributing your project (e.g., for marketplace submissions), include both minified and non-minified code.
+
+```
+dist/
+├── app.js              # Non-minified (required)
+├── app.min.js          # Minified (optional)
+├── app.js.map          # Source map for debugging
+└── app.min.js.map      # Source map for minified
+```
+
+### Required Files
+
+| File Type           | Required    | Purpose                          |
+| ------------------- | ----------- | -------------------------------- |
+| Non-minified source | ✅ Yes      | Code review, debugging, learning |
+| Minified source     | Optional    | Production performance           |
+| Source maps         | Recommended | Error tracking, debugging        |
+| TypeScript source   | ✅ Yes      | Original source files            |
+
+### Build Script Configuration
+
+```json
+// package.json
+{
+  "scripts": {
+    "build": "next build",
+    "build:analyze": "ANALYZE=true next build",
+    "build:source": "tsc --outDir dist/source --sourceMap",
+    "build:minified": "tsc && terser dist/*.js -o dist/app.min.js --source-map",
+    "build:all": "npm run build:source && npm run build:minified"
+  }
+}
+```
+
+### Why Non-Minified Code is Required
+
+1. **Code Review** — Reviewers must be able to read and understand your code
+2. **Debugging** — Users need readable code to troubleshoot issues
+3. **Learning** — Developers learn from readable source code
+4. **Modification** — Users may need to customize your code
+5. **Security Audit** — Minified code cannot be properly audited
+
+```typescript
+// [Good] Clear, readable source code
+export function calculateDiscount(price: number, percentage: number): number {
+  if (percentage < 0 || percentage > 100) {
+    throw new Error("Percentage must be between 0 and 100");
+  }
+  return price * (1 - percentage / 100);
+}
+
+// [Bad] Only providing minified code
+// function c(p,e){if(e<0||e>100)throw Error("...");return p*(1-e/100)}
+```
+
+---
+
 ## Build Optimization
 
 ### next.config.js Production Settings

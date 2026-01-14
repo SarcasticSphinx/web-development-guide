@@ -706,14 +706,14 @@ export default async function ProductsPage({ searchParams }: Props) {
   const products = await getProducts({
     category,
     sort,
-    page: parseInt(page),
+    page: parseInt(page, 10),
   });
 
   return (
     <div>
       <ProductFilters />
       <ProductGrid products={products} />
-      <Pagination currentPage={parseInt(page)} />
+      <Pagination currentPage={parseInt(page, 10)} />
     </div>
   );
 }

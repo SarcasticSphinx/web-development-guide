@@ -1,17 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
 import { SearchModal } from "@/components/SearchModal";
-import { DOCS } from "@/lib/docs";
+import { DOCS, type DocWithContent } from "@/lib/docs";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 
-export function ClientShell({ children }: { children: React.ReactNode }) {
+interface ClientShellProps {
+  children: React.ReactNode;
+  docsWithContent: DocWithContent[];
+}
+
+export function ClientShell({ children, docsWithContent }: ClientShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [pendingHighlight, setPendingHighlight] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -43,6 +49,103 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
     router.push(`/${docId}`);
     setSidebarOpen(false);
   };
+
+  // Highlight and scroll to search matches
+  const highlightSearchMatches = useCallback((searchQuery: string) => {
+    // Wait for content to render
+    setTimeout(() => {
+      const contentEl = document.querySelector(".content.server-markdown");
+      if (!contentEl) return;
+
+      // Remove any existing highlights
+      document.querySelectorAll(".search-match-highlight").forEach((el) => {
+        const parent = el.parentNode;
+        if (parent) {
+          parent.replaceChild(
+            document.createTextNode(el.textContent || ""),
+            el
+          );
+          parent.normalize();
+        }
+      });
+
+      // Find and highlight matches in text nodes
+      const walker = document.createTreeWalker(
+        contentEl,
+        NodeFilter.SHOW_TEXT,
+        null
+      );
+
+      const matches: { node: Text; index: number }[] = [];
+      let node: Text | null;
+
+      while ((node = walker.nextNode() as Text)) {
+        const text = node.textContent || "";
+        const lowerText = text.toLowerCase();
+        const lowerQuery = searchQuery.toLowerCase();
+        let index = lowerText.indexOf(lowerQuery);
+
+        while (index !== -1) {
+          matches.push({ node, index });
+          index = lowerText.indexOf(lowerQuery, index + 1);
+        }
+      }
+
+      // Highlight first match and scroll to it
+      if (matches.length > 0) {
+        const firstMatch = matches[0];
+        const { node: textNode, index } = firstMatch;
+        const text = textNode.textContent || "";
+
+        const before = text.slice(0, index);
+        const match = text.slice(index, index + searchQuery.length);
+        const after = text.slice(index + searchQuery.length);
+
+        const span = document.createElement("span");
+        span.className = "search-match-highlight";
+        span.textContent = match;
+
+        const parent = textNode.parentNode;
+        if (parent) {
+          const beforeNode = document.createTextNode(before);
+          const afterNode = document.createTextNode(after);
+
+          parent.insertBefore(beforeNode, textNode);
+          parent.insertBefore(span, textNode);
+          parent.insertBefore(afterNode, textNode);
+          parent.removeChild(textNode);
+
+          // Scroll to the highlighted match
+          span.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }
+
+      // Clear highlight after 5 seconds
+      setTimeout(() => {
+        document.querySelectorAll(".search-match-highlight").forEach((el) => {
+          el.classList.add("fade-out");
+          setTimeout(() => {
+            const parent = el.parentNode;
+            if (parent) {
+              parent.replaceChild(
+                document.createTextNode(el.textContent || ""),
+                el
+              );
+              parent.normalize();
+            }
+          }, 500);
+        });
+      }, 5000);
+    }, 300);
+  }, []);
+
+  // Handle pending highlight after navigation
+  useEffect(() => {
+    if (pendingHighlight) {
+      highlightSearchMatches(pendingHighlight);
+      setPendingHighlight(null);
+    }
+  }, [pathname, pendingHighlight, highlightSearchMatches]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -85,11 +188,18 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
 
       {searchOpen && (
         <SearchModal
-          docs={DOCS}
+          docs={docsWithContent}
           onClose={() => setSearchOpen(false)}
-          onDocSelect={(docId) => {
-            handleDocSelect(docId);
+          onDocSelect={(docId, anchor, searchQuery) => {
+            const url = anchor ? `/${docId}#${anchor}` : `/${docId}`;
+            router.push(url);
+            setSidebarOpen(false);
             setSearchOpen(false);
+
+            // Set pending highlight to be applied after navigation
+            if (searchQuery) {
+              setPendingHighlight(searchQuery);
+            }
           }}
         />
       )}
