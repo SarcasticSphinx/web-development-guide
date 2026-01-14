@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import { getAllDocSlugs, getDocContent } from "@/lib/docs-server";
 import { DOCS } from "@/lib/docs";
-import { MarkdownContent } from "@/components/MarkdownContent";
+import { ServerMarkdownContent } from "@/components/ServerMarkdownContent";
 import { TableOfContents } from "@/components/TableOfContents";
 import { PageNavigation } from "@/components/PageNavigation";
 import { ChecklistManager } from "@/components/ChecklistManager";
+import { parseMarkdown } from "@/lib/markdown";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -22,16 +23,8 @@ export default async function DocPage({ params }: PageProps) {
     notFound();
   }
 
-  // Extract headings
-  const headingMatches = content.matchAll(/^(#{2,3})\s+(.+)$/gm);
-  const headings = Array.from(headingMatches).map((match) => ({
-    id: match[2]
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, ""),
-    text: match[2],
-    level: match[1].length,
-  }));
+  // Parse markdown on server and extract headings
+  const { headings } = await parseMarkdown(content);
 
   const currentIndex = DOCS.findIndex((d) => d.id === slug);
   const prevDoc = currentIndex > 0 ? DOCS[currentIndex - 1] : null;
@@ -48,17 +41,10 @@ export default async function DocPage({ params }: PageProps) {
           {isChecklistPage ? (
             <ChecklistManager content={content} />
           ) : (
-            <MarkdownContent content={content} />
+            <ServerMarkdownContent content={content} />
           )}
         </article>
-        <PageNavigation
-          prevDoc={prevDoc}
-          nextDoc={nextDoc}
-          // We need a client wrapper for navigation or just use Link in PageNavigation
-          // PageNavigation uses a callback `onNavigate` which calls loadDocument (client state).
-          // We need to refactor PageNavigation to use href links instead of onClick.
-          // Since we are moving to standard routing, PageNavigation should use Next.js <Link>.
-        />
+        <PageNavigation prevDoc={prevDoc} nextDoc={nextDoc} />
       </main>
       <TableOfContents headings={headings} />
     </>

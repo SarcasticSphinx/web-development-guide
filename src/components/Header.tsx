@@ -27,7 +27,7 @@ export function Header({
             <IconMenu2 size={24} />
           </button>
           <div className="font-semibold text-lg tracking-tight">
-            Envato<span style={{ color: "var(--color-info)" }}>Docs</span>
+            Development<span style={{ color: "var(--color-info)" }}> Docs</span>
           </div>
         </div>
 
