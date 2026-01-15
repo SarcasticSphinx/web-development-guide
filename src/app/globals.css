@@ -785,11 +785,11 @@ body {
 }
 
 .content h4 {
-  font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-size: var(--font-size-base);
+  font-weight: 500;
   margin-top: var(--space-lg);
   margin-bottom: var(--space-sm);
-  color: var(--color-text);
+  color: var(--color-text-secondary);
 }
 
 .content p {
@@ -797,13 +797,13 @@ body {
 }
 
 .content a {
-  color: var(--color-primary);
+  color: #3b82f6;
   text-decoration: none;
   transition: color var(--transition-fast);
 }
 
 .content a:hover {
-  color: var(--color-primary-hover);
+  color: #2563eb;
   text-decoration: underline;
 }
 
@@ -858,6 +858,16 @@ body {
   border-collapse: collapse;
   margin-bottom: var(--space-lg);
   font-size: var(--font-size-sm);
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 768px) {
+  .content table {
+    display: table;
+    overflow-x: visible;
+  }
 }
 
 .content th,
@@ -1093,9 +1103,9 @@ body {
     position: fixed;
     z-index: 100;
     right: 0;
-    top: 0;
+    top: var(--header-height);
     bottom: 0;
-    height: 100vh;
+    height: calc(100vh - var(--header-height));
     width: 280px;
     transform: translateX(100%);
     transition: transform var(--transition-base);

@@ -92,7 +92,10 @@ export async function parseMarkdown(content: string): Promise<ParsedMarkdown> {
     heading({ tokens, depth }: Tokens.Heading): string {
       const text = tokens.map((t) => ("text" in t ? t.text : "")).join("");
       const id = slugify(text);
-      headings.push({ id, text, level: depth });
+      // Skip "Table of Contents" from TOC sidebar
+      if (text.toLowerCase() !== "table of contents") {
+        headings.push({ id, text, level: depth });
+      }
       return `<h${depth} id="${id}">${text}</h${depth}>`;
     },
 

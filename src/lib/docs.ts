@@ -59,7 +59,12 @@ export const DOCS: Doc[] = [
   { id: "16-environment", title: "Environment", section: "Implementation" },
   { id: "17-deployment", title: "Deployment", section: "Implementation" },
   {
-    id: "18-review-checklist",
+    id: "18-common-mistakes",
+    title: "Common Mistakes",
+    section: "Reference",
+  },
+  {
+    id: "19-review-checklist",
     title: "Review Checklist",
     section: "Reference",
   },

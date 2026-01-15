@@ -32,7 +32,7 @@ export default async function DocPage({ params }: PageProps) {
     currentIndex < DOCS.length - 1 ? DOCS[currentIndex + 1] : null;
 
   // Check if this is the review checklist page
-  const isChecklistPage = slug === "18-review-checklist";
+  const isChecklistPage = slug === "19-review-checklist";
 
   return (
     <>
